@@ -15,13 +15,14 @@ def lexer(code):
     """
     tokens = []
     token_specification = [
-        ('NUMBER',   r'\d+(\.\d*)?'),  # Integer oder Dezimalzahl
-        ('ASSIGN',   r'='),               # Zuweisungsoperator
-        ('END',      r';'),               # Zeilenende
-        ('ID',       r'[A-Za-z]+'),       # Bezeichner (Variablenname)
-        ('OP',       r'[+\-*/]'),        # Arithmetische Operatoren
-        ('WHITESPACE', r'[ \t]+'),       # Leerzeichen (ignoriert)
-        ('NEWLINE',  r'\n'),             # Neue Zeile
+        ('COMMAND', r'\b(PRINT|SET|ADD|SUB)\b'),  # Befehle wie PRINT, SET, ADD, SUB
+        ('NUMBER',   r'\d+(\.\d*)?'),            # Integer oder Dezimalzahl
+        ('ASSIGN',   r'='),                         # Zuweisungsoperator
+        ('END',      r';'),                         # Zeilenende
+        ('ID',       r'[A-Za-z]+'),                 # Bezeichner (Variablenname)
+        ('OP',       r'[+\-*/]'),                  # Arithmetische Operatoren
+        ('WHITESPACE', r'[ \t]+'),                 # Leerzeichen (ignoriert)
+        ('NEWLINE',  r'\n'),                       # Neue Zeile
     ]
     token_re = '|'.join('(?P<%s>%s)' % pair for pair in token_specification)
     for match in re.finditer(token_re, code):
@@ -38,69 +39,41 @@ class AST:
     pass
 
 class BinOp(AST):
-    """
-    Klasse für binäre Operationen (z.B. Addition, Subtraktion).
-    
-    Attribute:
-        left (AST): Linkes Operand.
-        op (str): Operator ('+', '-', '*', '/').
-        right (AST): Rechtes Operand.
-    """
     def __init__(self, left, op, right):
         self.left = left
         self.op = op
         self.right = right
 
 class Num(AST):
-    """
-    Klasse für Zahlen im AST.
-    
-    Attribute:
-        value (float): Der numerische Wert.
-    """
     def __init__(self, value):
         self.value = value
 
 class Assign(AST):
-    """
-    Klasse für Zuweisungen im AST.
-    
-    Attribute:
-        var (str): Variablenname.
-        expr (AST): Ausdruck, der der Variablen zugewiesen wird.
-    """
     def __init__(self, var, expr):
         self.var = var
         self.expr = expr
 
+class PrintCommand(AST):
+    def __init__(self, var):
+        self.var = var
+
+class AddCommand(AST):
+    def __init__(self, var, value):
+        self.var = var
+        self.value = value
+
+class SubCommand(AST):
+    def __init__(self, var, value):
+        self.var = var
+        self.value = value
+
 
 # Parser: Erstellt einen AST aus Tokens
 def parse(tokens):
-    """
-    Parser-Funktion, die eine Liste von Tokens in einen Abstract Syntax Tree (AST) umwandelt.
-    
-    Parameter:
-        tokens (list): Liste der Tokens, die vom Lexer generiert wurden.
-
-    Returns:
-        AST: Der Root-Knoten des AST, der den Code repräsentiert.
-    """
     it = iter(tokens)
     token = next(it, None)
 
     def eat(expected_type):
-        """
-        Verarbeitet ein Token des erwarteten Typs und geht zum nächsten Token über.
-        
-        Parameter:
-            expected_type (str): Der erwartete Token-Typ.
-
-        Returns:
-            tuple: Das verarbeitete Token.
-
-        Raises:
-            SyntaxError: Falls der erwartete Token-Typ nicht übereinstimmt.
-        """
         nonlocal token
         if token and token[0] == expected_type:
             old_token = token
@@ -110,12 +83,6 @@ def parse(tokens):
             raise SyntaxError(f"Expected {expected_type}")
 
     def expr():
-        """
-        Funktion zur Analyse arithmetischer Ausdrücke.
-        
-        Returns:
-            AST: Knoten im AST, der den arithmetischen Ausdruck repräsentiert.
-        """
         left = term()
         while token and token[0] == 'OP':
             op = eat('OP')
@@ -124,12 +91,6 @@ def parse(tokens):
         return left
 
     def term():
-        """
-        Funktion zur Analyse eines Terms (eine Zahl oder eine Variable).
-        
-        Returns:
-            AST: Knoten im AST, der den Term repräsentiert.
-        """
         if token[0] == 'NUMBER':
             value = eat('NUMBER')
             return Num(float(value[1]))
@@ -137,42 +98,47 @@ def parse(tokens):
             return eat('ID')
 
     def assignment():
-        """
-        Funktion zur Analyse einer Zuweisung (z.B. x = 5;).
-        
-        Returns:
-            AST: Knoten im AST, der die Zuweisung repräsentiert.
-        """
         var = eat('ID')
         eat('ASSIGN')
         value = expr()
         eat('END')
         return Assign(var[1], value)
 
-    return assignment()
+    def command():
+        cmd_token = eat('COMMAND')
+        if cmd_token[1] == 'PRINT':
+            var = eat('ID')
+            eat('END')
+            return PrintCommand(var[1])
+        elif cmd_token[1] == 'SET':
+            var = eat('ID')
+            eat('ASSIGN')
+            value = expr()
+            eat('END')
+            return Assign(var[1], value)
+        elif cmd_token[1] == 'ADD':
+            var = eat('ID')
+            value = expr()
+            eat('END')
+            return AddCommand(var[1], value)
+        elif cmd_token[1] == 'SUB':
+            var = eat('ID')
+            value = expr()
+            eat('END')
+            return SubCommand(var[1], value)
+
+    if token[0] == 'COMMAND':
+        return command()
+    else:
+        return assignment()
 
 
 # Interpreter-Klasse
 class Interpreter:
-    """
-    Interpreter-Klasse, die den AST auswertet und die Ergebnisse speichert.
-
-    Attribute:
-        variables (dict): Speichert die Werte der Variablen.
-    """
     def __init__(self):
         self.variables = {}
 
     def visit(self, node):
-        """
-        Wertet einen Knoten des AST rekursiv aus.
-        
-        Parameter:
-            node (AST): Der zu bewertende Knoten.
-
-        Returns:
-            float: Der Wert des Knotens oder None für Zuweisungen.
-        """
         if isinstance(node, Num):
             return node.value
         elif isinstance(node, BinOp):
@@ -190,15 +156,20 @@ class Interpreter:
             value = self.visit(node.expr)
             self.variables[node.var] = value
             return value
+        elif isinstance(node, PrintCommand):
+            print(f"Wert von {node.var}: {self.variables.get(node.var, 'undefiniert')}")
+        elif isinstance(node, AddCommand):
+            self.variables[node.var] += self.visit(node.value)
+        elif isinstance(node, SubCommand):
+            self.variables[node.var] -= self.visit(node.value)
 
 
 # Beispiel
 if __name__ == "__main__":
-    code = input("Gib den Code ein, den du ausführen möchtest (z. B. 'x = 10 * 3;'): ")
+    code = input("Gib den Code ein, den du ausführen möchtest (z. B. 'SET x = 10; ADD x 5; PRINT x;'): ")
     tokens = lexer(code)
     print("Tokens:", tokens)
     ast = parse(tokens)
     print("AST:", ast)
     interpreter = Interpreter()
     interpreter.visit(ast)
-    print(f"Wert von x: {interpreter.variables.get('x')}")
