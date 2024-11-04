@@ -1,4 +1,3 @@
-
 import re
 
 # Lexer: Zerlegt den Code in Tokens
@@ -15,14 +14,14 @@ def lexer(code):
     """
     tokens = []
     token_specification = [
-        ('COMMAND', r'\b(PRINT|SET|ADD|SUB)\b'),  # Befehle wie PRINT, SET, ADD, SUB
-        ('NUMBER',   r'\d+(\.\d*)?'),            # Integer oder Dezimalzahl
+        ('COMMAND', r'\\b(PRINT|SET|ADD|SUB)\\b'),  # Befehle wie PRINT, SET, ADD, SUB
+        ('NUMBER',   r'\\d+(\\.\\d*)?'),            # Integer oder Dezimalzahl
         ('ASSIGN',   r'='),                         # Zuweisungsoperator
         ('END',      r';'),                         # Zeilenende
         ('ID',       r'[A-Za-z]+'),                 # Bezeichner (Variablenname)
-        ('OP',       r'[+\-*/]'),                  # Arithmetische Operatoren
-        ('WHITESPACE', r'[ \t]+'),                 # Leerzeichen (ignoriert)
-        ('NEWLINE',  r'\n'),                       # Neue Zeile
+        ('OP',       r'[+\\-*/]'),                  # Arithmetische Operatoren
+        ('WHITESPACE', r'[ \\t]+'),                 # Leerzeichen (ignoriert)
+        ('NEWLINE',  r'\\n'),                       # Neue Zeile
     ]
     token_re = '|'.join('(?P<%s>%s)' % pair for pair in token_specification)
     for match in re.finditer(token_re, code):
@@ -127,10 +126,11 @@ def parse(tokens):
             eat('END')
             return SubCommand(var[1], value)
 
-    if token[0] == 'COMMAND':
-        return command()
-    else:
-        return assignment()
+    while token:
+        if token[0] == 'COMMAND':
+            yield command()
+        else:
+            yield assignment()
 
 
 # Interpreter-Klasse
@@ -169,7 +169,8 @@ if __name__ == "__main__":
     code = input("Gib den Code ein, den du ausführen möchtest (z. B. 'SET x = 10; ADD x 5; PRINT x;'): ")
     tokens = lexer(code)
     print("Tokens:", tokens)
-    ast = parse(tokens)
-    print("AST:", ast)
     interpreter = Interpreter()
-    interpreter.visit(ast)
+    
+    # Mehrere Anweisungen parsen und ausführen
+    for ast in parse(tokens):
+        interpreter.visit(ast)
