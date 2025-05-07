@@ -45,7 +45,7 @@ Wert von x: 12.0
 ## ▶️ Ausführen
 
 ```bash
-python main.py
+python compiler.py
 ```
 
 Dann kannst du den Code interaktiv eingeben, z. B.:
